@@ -1,13 +1,16 @@
 package commands
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/concourse/concourse/atc"
@@ -287,21 +290,25 @@ type tcpKeepAliveListener struct {
 }
 
 func waitForTokenInput(tokenChannel chan string, errorChannel chan error) {
+	reader := bufio.NewReader(os.Stdin)
 	for {
-		var tokenType string
-		var tokenValue string
-		count, err := fmt.Scanf("%s %s", &tokenType, &tokenValue)
-		if err != nil {
-			if count != 2 {
-				fmt.Println("token must be of the format 'TYPE VALUE', e.g. 'Bearer ...'")
-				continue
-			}
-
+		token, err := reader.ReadString('\n')
+		token = strings.TrimSpace(token)
+		if len(token) == 0 && err == io.EOF {
+			return
+		}
+		if err != nil && err != io.EOF {
 			errorChannel <- err
 			return
 		}
 
-		tokenChannel <- tokenType + " " + tokenValue
+		parts := strings.Split(token, " ")
+		if len(parts) != 2 {
+			fmt.Println("token must be of the format 'TYPE VALUE', e.g. 'Bearer ...'")
+			continue
+		}
+
+		tokenChannel <- token
 		break
 	}
 }
